@@ -16,10 +16,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-white">
+      <body className="bg-background-secondary text-text">
         <SessionProvider>
           <Navbar />
-          <main className="min-h-screen bg-white relative">
+          <main className="min-h-screen bg-background relative">
             {children}
           </main>
           <Footer />

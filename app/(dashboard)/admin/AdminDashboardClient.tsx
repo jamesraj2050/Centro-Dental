@@ -72,6 +72,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
   const [doctors, setDoctors] = useState<
     { id: string; name: string; email: string; phone: string | null; createdAt: string }[]
   >([])
+  const [reportDoctorId, setReportDoctorId] = useState<string>("ALL")
   const [showDoctorModal, setShowDoctorModal] = useState(false)
   const [doctorForm, setDoctorForm] = useState({ name: "", email: "", phone: "", password: "" })
   const [doctorError, setDoctorError] = useState<string | null>(null)
@@ -168,7 +169,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
       if (formatType === "excel") {
         // For Excel, fetch data and generate client-side
         const response = await fetch(
-          `/api/admin/appointments?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
+          `/api/admin/appointments?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&doctorId=${reportDoctorId}`
         )
         
         if (response.ok) {
@@ -180,6 +181,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
             phone: apt.patient?.phone || apt.patientPhone || "N/A",
             email: apt.patient?.email || apt.patientEmail || "N/A",
             service: apt.service,
+            doctor: apt.doctor?.name || apt.doctor?.email || "N/A",
             paymentAmount: apt.paymentAmount ? Number(apt.paymentAmount) : null,
             paymentStatus: apt.paymentStatus || "PENDING",
           }))
@@ -195,7 +197,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
       } else {
         // For PDF, download from server
         const response = await fetch(
-          `/api/admin/reports?type=${type}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&format=${formatType}`
+          `/api/admin/reports?type=${type}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&format=${formatType}&doctorId=${reportDoctorId}`
         )
 
         if (response.ok) {
@@ -846,6 +848,30 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
             <h2 className="text-lg sm:text-xl font-semibold text-[#111111] mb-4">
               Generate Reports
             </h2>
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-xs sm:text-sm text-[#6b7280]">
+                  Choose a specific doctor or include all doctors in the report.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-[#4b5563]">
+                  Doctor
+                </label>
+                <select
+                  className="border border-[#e4e4e7] rounded-lg px-2 py-1 text-sm bg-white"
+                  value={reportDoctorId}
+                  onChange={(e) => setReportDoctorId(e.target.value)}
+                >
+                  <option value="ALL">All doctors</option>
+                  {doctors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name || d.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
             <ReportExport onExport={handleExportReport} isLoading={isLoading} />
           </Card>
         )}

@@ -13,15 +13,15 @@ export const Card: React.FC<CardProps> = ({
   ...props
 }) => {
   const variants = {
-    default: "bg-white border border-[#e5e5ea] shadow-lg",
-    elevated: "bg-white shadow-xl border border-[#e5e5ea]",
-    outlined: "bg-white border-2 border-[#d2d2d7]",
+    default: "bg-background border border-border-light shadow-apple",
+    elevated: "bg-background shadow-apple-lg border border-border-light",
+    outlined: "bg-background border-2 border-border",
   }
 
   return (
     <div
       className={cn(
-        "rounded-[18px] p-6 transition-all duration-200",
+        "rounded-apple-lg p-6 transition-all duration-200 hover:-translate-y-0.5",
         variants[variant],
         className
       )}

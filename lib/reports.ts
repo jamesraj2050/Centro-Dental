@@ -10,6 +10,7 @@ export interface ReportData {
   phone: string
   email: string
   service: string
+  doctor?: string | null
   paymentAmount: number | null
   paymentStatus: string | null
 }
@@ -20,6 +21,7 @@ export function generateExcelReport(data: ReportData[], filename: string): void 
     Date: format(new Date(row.date), "MMM d, yyyy"),
     Time: row.time,
     Name: row.name,
+    Doctor: row.doctor || "N/A",
     Phone: row.phone,
     Email: row.email,
     Service: row.service,
@@ -56,6 +58,7 @@ export function generateExcelReport(data: ReportData[], filename: string): void 
     { wch: 12 }, // Date
     { wch: 10 }, // Time
     { wch: 20 }, // Name
+    { wch: 18 }, // Doctor
     { wch: 15 }, // Phone
     { wch: 25 }, // Email
     { wch: 20 }, // Service
@@ -90,6 +93,7 @@ export function generatePDFReport(data: ReportData[], filename: string): void {
     format(new Date(row.date), "MMM d, yyyy"),
     row.time,
     row.name,
+    row.doctor || "N/A",
     row.phone,
     row.email,
     row.service,
@@ -99,7 +103,7 @@ export function generatePDFReport(data: ReportData[], filename: string): void {
 
   // Add table
   ;(doc as any).autoTable({
-    head: [["Date", "Time", "Name", "Phone", "Email", "Service", "Amount", "Status"]],
+    head: [["Date", "Time", "Name", "Doctor", "Phone", "Email", "Service", "Amount", "Status"]],
     body: tableData,
     startY: 28,
     styles: { fontSize: 8 },

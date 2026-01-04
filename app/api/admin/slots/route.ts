@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       date: string
       time: string
       isBooked: boolean
+      isBlocked?: boolean
       appointment?: any
     }> = []
 
@@ -60,6 +61,20 @@ export async function GET(request: NextRequest) {
         },
       },
     })
+
+    // Get any explicitly blocked slots in the date range
+    const blocked = await prisma.blockedSlot.findMany({
+      where: {
+        date: {
+          gte: startOfDay(start),
+          lte: endOfDay(end),
+        },
+      },
+    })
+
+    const blockedKeys = new Set(
+      blocked.map((b) => `${format(b.date, "yyyy-MM-dd")}|${format(b.date, "HH:mm")}`)
+    )
 
     // Generate time slots for each day
     for (const day of days) {
@@ -96,10 +111,14 @@ export async function GET(request: NextRequest) {
             )
           })
 
+          const key = `${format(day, "yyyy-MM-dd")}|${timeString}`
+          const isBlocked = blockedKeys.has(key)
+
           slots.push({
             date: format(day, "yyyy-MM-dd"),
             time: timeString,
             isBooked: !!appointment,
+            isBlocked,
             appointment: appointment || undefined,
           })
         }

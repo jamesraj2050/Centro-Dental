@@ -46,6 +46,7 @@ model User {
   appointments  Appointment[]
   doctorAppointments Appointment[] @relation("DoctorAppointments")
   availabilities Availability[]
+  blockedSlots  BlockedSlot[]
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 }
@@ -93,5 +94,20 @@ model Availability {
   updatedAt DateTime @updatedAt
 
   @@index([doctorId, dayOfWeek])
+}
+
+model BlockedSlot {
+  id        String   @id @default(cuid())
+  /// Optional: if set, this block only applies to a specific doctor.
+  doctorId  String?  @db.Uuid
+  doctor    User?    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  /// Exact date and time that is blocked.
+  date      DateTime
+  /// Optional human-readable reason (e.g. "Lunch", "Public Holiday").
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorId, date])
 }
 

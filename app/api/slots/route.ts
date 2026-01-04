@@ -131,6 +131,19 @@ export async function GET(request: NextRequest) {
       },
     })
 
+    // Load any blocked slots for this specific day
+    const blockedSlots = await prisma.blockedSlot.findMany({
+      where: {
+        date: {
+          gte: startOfDay(requestedDate),
+          lte: endOfDay(requestedDate),
+        },
+      },
+    })
+    const blockedTimes = new Set(
+      blockedSlots.map((b) => format(b.date, "HH:mm"))
+    )
+
     // Map of time string -> set of doctor ids who are booked at that time
     const bookedByTime = new Map<string, Set<string>>()
 
@@ -160,6 +173,11 @@ export async function GET(request: NextRequest) {
     }
 
     slotTimes.forEach((time) => {
+      // Skip times that are explicitly blocked (e.g., lunch, holidays)
+      if (blockedTimes.has(time)) {
+        return
+      }
+
       const bookedSet = bookedByTime.get(time) ?? new Set<string>()
 
       let isFilled = false

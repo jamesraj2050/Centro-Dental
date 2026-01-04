@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
     const status = searchParams.get("status")
+    const doctorId = searchParams.get("doctorId")
 
     const where: any = {}
 
@@ -47,6 +48,10 @@ export async function GET(request: NextRequest) {
 
     if (status) {
       where.status = status
+    }
+
+    if (doctorId && doctorId !== "ALL") {
+      where.doctorId = doctorId
     }
 
     const appointments = await prisma.appointment.findMany({

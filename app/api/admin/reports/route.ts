@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get("startDate")
     const endDate = searchParams.get("endDate")
     const formatType = searchParams.get("format") // "excel" or "pdf"
+    const doctorId = searchParams.get("doctorId") // specific doctor or "ALL"
 
     if (!startDate || !endDate || !formatType) {
       return NextResponse.json(
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
     const start = new Date(startDate)
     const end = new Date(endDate)
 
-    // Get appointments in date range
+    // Get appointments in date range (optionally filtered by doctor)
     const appointments = await prisma.appointment.findMany({
       where: {
         date: {
@@ -43,6 +44,11 @@ export async function GET(request: NextRequest) {
         status: {
           notIn: ["CANCELLED"],
         },
+        ...(doctorId && doctorId !== "ALL"
+          ? {
+              doctorId,
+            }
+          : {}),
       },
       orderBy: { date: "asc" },
       include: {
@@ -51,6 +57,12 @@ export async function GET(request: NextRequest) {
             name: true,
             email: true,
             phone: true,
+          },
+        },
+        doctor: {
+          select: {
+            name: true,
+            email: true,
           },
         },
       },
@@ -64,6 +76,7 @@ export async function GET(request: NextRequest) {
       phone: apt.patient?.phone || apt.patientPhone || "N/A",
       email: apt.patient?.email || apt.patientEmail || "N/A",
       service: apt.service,
+      doctor: apt.doctor?.name || apt.doctor?.email || "N/A",
       paymentAmount: apt.paymentAmount ? Number(apt.paymentAmount) : null,
       paymentStatus: apt.paymentStatus,
     }))
@@ -117,6 +130,7 @@ async function generatePDFBuffer(data: ReportData[], filename: string): Promise<
     format(new Date(row.date), "MMM d, yyyy"),
     row.time,
     row.name,
+    row.doctor || "N/A",
     row.phone,
     row.email,
     row.service,
@@ -125,7 +139,7 @@ async function generatePDFBuffer(data: ReportData[], filename: string): Promise<
   ])
 
   ;(doc as any).autoTable({
-    head: [["Date", "Time", "Name", "Phone", "Email", "Service", "Amount", "Status"]],
+    head: [["Date", "Time", "Name", "Doctor", "Phone", "Email", "Service", "Amount", "Status"]],
     body: tableData,
     startY: 28,
     styles: { fontSize: 8 },
