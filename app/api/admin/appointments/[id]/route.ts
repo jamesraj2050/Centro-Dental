@@ -12,6 +12,7 @@ const updateAppointmentSchema = z.object({
   service: z.string().optional(),
   notes: z.string().optional(),
   status: z.enum(["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]).optional(),
+  adminConfirmed: z.boolean().optional(),
 })
 
 // PATCH: Update appointment
@@ -62,6 +63,10 @@ export async function PATCH(
     if (validatedData.phone) {
       updateData.patientPhone = validatedData.phone
     }
+
+  if (validatedData.adminConfirmed !== undefined) {
+    updateData.adminConfirmed = validatedData.adminConfirmed
+  }
 
     const appointment = await prisma.appointment.update({
       where: { id: params.id },

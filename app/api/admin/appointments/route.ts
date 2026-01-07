@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma, setCurrentUserIdForRLS } from "@/lib/prisma"
 import { z } from "zod"
+import { endOfDay, getDay, startOfDay } from "date-fns"
 
 const appointmentSchema = z.object({
   date: z.string(),
@@ -106,17 +107,95 @@ export async function POST(request: NextRequest) {
     const [hours, minutes] = validatedData.time.split(":").map(Number)
     appointmentDate.setHours(hours, minutes, 0, 0)
 
-    // If a doctor is specified, avoid double-booking that doctor at this time
-    if (validatedData.doctorId) {
+    // Resolve doctor assignment:
+    // - If admin selected a doctor, use that (and ensure no double-booking).
+    // - Otherwise, auto-assign using a simple round-robin based on daily load and availability.
+    let doctorIdToUse: string | null = validatedData.doctorId ?? null
+
+    if (!doctorIdToUse) {
+      const dayOfWeek = getDay(appointmentDate)
+      const allDoctors = await prisma.user.findMany({
+        where: { role: "DOCTOR" },
+        select: { id: true },
+      })
+
+      if (allDoctors.length > 0) {
+        const doctorIds = allDoctors.map((d) => d.id)
+
+        // Doctors who are actively available on this weekday AND within the time window
+        const availabilities = await prisma.availability.findMany({
+          where: {
+            dayOfWeek,
+            isActive: true,
+            doctorId: { in: doctorIds },
+          },
+        })
+
+        const minutesSinceMidnight = hours * 60 + minutes
+
+        const availableDoctorIds = availabilities
+          .filter((a) => {
+            const [sh, sm] = a.startTime.split(":").map(Number)
+            const [eh, em] = a.endTime.split(":").map(Number)
+            const startMinutes = sh * 60 + sm
+            const endMinutes = eh * 60 + em
+            return minutesSinceMidnight >= startMinutes && minutesSinceMidnight < endMinutes
+          })
+          .map((a) => a.doctorId!)
+
+        if (availableDoctorIds.length > 0) {
+          // Count how many appointments each available doctor already has today
+          const dayStart = startOfDay(appointmentDate)
+          const dayEnd = endOfDay(appointmentDate)
+
+          const todaysAppointments = await prisma.appointment.findMany({
+            where: {
+              doctorId: { in: availableDoctorIds },
+              date: {
+                gte: dayStart,
+                lte: dayEnd,
+              },
+              status: {
+                notIn: ["CANCELLED"],
+              },
+            },
+            select: {
+              doctorId: true,
+            },
+          })
+
+          const counts = new Map<string, number>()
+          availableDoctorIds.forEach((id) => counts.set(id, 0))
+          todaysAppointments.forEach((apt) => {
+            if (apt.doctorId) {
+              counts.set(apt.doctorId, (counts.get(apt.doctorId) ?? 0) + 1)
+            }
+          })
+
+          // Pick doctor with fewest appointments today (simple round-robin / fair distribution)
+          let chosenDoctorId: string | null = null
+          let minCount = Number.POSITIVE_INFINITY
+          for (const id of availableDoctorIds) {
+            const c = counts.get(id) ?? 0
+            if (c < minCount) {
+              minCount = c
+              chosenDoctorId = id
+            }
+          }
+
+          doctorIdToUse = chosenDoctorId
+        }
+      }
+    }
+
+    if (doctorIdToUse) {
       const slotTaken = await prisma.appointment.findFirst({
         where: {
           date: appointmentDate,
           status: {
             notIn: ["CANCELLED"],
           },
-          doctor: {
-            is: { id: validatedData.doctorId },
-          },
+          doctorId: doctorIdToUse,
         },
       })
 
@@ -133,19 +212,52 @@ export async function POST(request: NextRequest) {
       where: { email: validatedData.email },
     })
 
+    // Enforce at most one active upcoming appointment per patient
+    const now = new Date()
+    const patientConditions: any[] = []
+    if (user?.id) {
+      patientConditions.push({ patientId: user.id })
+    }
+    patientConditions.push({ patientEmail: validatedData.email })
+
+    const existingForPatient = await prisma.appointment.findFirst({
+      where: {
+        OR: patientConditions,
+        status: {
+          notIn: ["CANCELLED", "COMPLETED"],
+        },
+        date: {
+          gte: now,
+        },
+      },
+    })
+
+    if (existingForPatient) {
+      return NextResponse.json(
+        {
+          error:
+            "This patient already has an active appointment. Please cancel the current booking from their dashboard before creating a new one.",
+        },
+        { status: 400 }
+      )
+    }
+
     const appointmentData: any = {
       service: validatedData.service,
       date: appointmentDate,
       status: "CONFIRMED",
       ...(validatedData.notes ? { notes: validatedData.notes } : {}),
-      createdBy: "ADMIN",
+      createdBy:
+        session.user?.email?.split("@")[0] ||
+        session.user?.name ||
+        "ADMIN",
       paymentStatus: "PENDING",
       // treatmentStatus omitted here to stay compatible with current Prisma schema/client
     }
 
-    if (validatedData.doctorId) {
+    if (doctorIdToUse) {
       appointmentData.doctor = {
-        connect: { id: validatedData.doctorId },
+        connect: { id: doctorIdToUse },
       }
     }
 

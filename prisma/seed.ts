@@ -41,35 +41,40 @@ async function main() {
 
   console.log("✅ Seeded availability data")
 
-  // Create Admin user
-  const adminEmail = "Admin@AusDenta.au"
-  const adminPassword = "Admin@135"
-  const hashedAdminPassword = await bcrypt.hash(adminPassword, 10)
+  // Create Admin users
+  const adminAccounts = [
+    { email: "Admin@AusDenta.au", name: "Admin", password: "Admin@135" },
+    { email: "Admin2@gmail.com", name: "Admin2", password: "Admin2@135" },
+  ]
 
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
-  })
+  for (const admin of adminAccounts) {
+    const hashedPassword = await bcrypt.hash(admin.password, 10)
 
-  if (!existingAdmin) {
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: "Admin",
-        password: hashedAdminPassword,
-        role: "ADMIN",
-      },
+    const existingAdmin = await prisma.user.findUnique({
+      where: { email: admin.email },
     })
-    console.log("✅ Created admin user")
-  } else {
-    // Update existing admin password if needed
-    await prisma.user.update({
-      where: { email: adminEmail },
-      data: {
-        password: hashedAdminPassword,
-        role: "ADMIN",
-      },
-    })
-    console.log("✅ Updated admin user")
+
+    if (!existingAdmin) {
+      await prisma.user.create({
+        data: {
+          email: admin.email,
+          name: admin.name,
+          password: hashedPassword,
+          role: "ADMIN",
+        },
+      })
+      console.log(`✅ Created admin user ${admin.email}`)
+    } else {
+      await prisma.user.update({
+        where: { email: admin.email },
+        data: {
+          password: hashedPassword,
+          role: "ADMIN",
+          name: admin.name,
+        },
+      })
+      console.log(`✅ Updated admin user ${admin.email}`)
+    }
   }
 
   // Create Doctor user (you can customize this)

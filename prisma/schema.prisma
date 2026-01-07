@@ -72,6 +72,7 @@ model Appointment {
   createdBy    String?        // "ADMIN" or "USER"
   doctorId     String?        @db.Uuid
   doctor       User?          @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  adminConfirmed Boolean      @default(false)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

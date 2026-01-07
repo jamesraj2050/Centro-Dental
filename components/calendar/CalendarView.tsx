@@ -1,7 +1,18 @@
 "use client"
 
 import { useState } from "react"
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay } from "date-fns"
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  addMonths,
+  subMonths,
+  getDay,
+  startOfDay,
+} from "date-fns"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { cn } from "@/lib/utils"
@@ -20,6 +31,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   minDate = new Date(),
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date())
+  const normalizedMinDate = startOfDay(minDate)
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -29,7 +41,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
   const daysBeforeMonth = Array.from({ length: firstDayOfWeek }, (_, i) => i)
 
   const isDateUnavailable = (date: Date) => {
-    if (date < minDate) return true
+    if (date < normalizedMinDate) return true
     return unavailableDates.some((unavailable) => isSameDay(date, unavailable))
   }
 

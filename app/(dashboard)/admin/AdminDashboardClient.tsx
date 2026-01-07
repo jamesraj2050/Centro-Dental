@@ -19,8 +19,9 @@ import {
   FileSpreadsheet,
   FileText,
   UserPlus,
+  Filter,
 } from "lucide-react"
-import { format } from "date-fns"
+import { addDays, endOfDay, format, isSameDay, startOfDay } from "date-fns"
 import { cn } from "@/lib/utils"
 
 interface Appointment {
@@ -31,6 +32,8 @@ interface Appointment {
   paymentAmount: number | null
   paymentStatus: string | null
   treatmentStatus?: string | null
+  createdBy?: string | null
+  adminConfirmed?: boolean | null
   patient: {
     name: string
     email: string
@@ -72,15 +75,18 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
   const [doctors, setDoctors] = useState<
     { id: string; name: string; email: string; phone: string | null; createdAt: string }[]
   >([])
-  const [reportDoctorId, setReportDoctorId] = useState<string>("ALL")
+  const [reportDoctorId, setReportDoctorId] = useState<string>("") // empty string = all doctors
   const [showDoctorModal, setShowDoctorModal] = useState(false)
   const [doctorForm, setDoctorForm] = useState({ name: "", email: "", phone: "", password: "" })
   const [doctorError, setDoctorError] = useState<string | null>(null)
+  const [currentDate, setCurrentDate] = useState<Date>(new Date())
   // Filter appointments from current date ascending
   const sortedAppointments = [...appointments].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
   )
-  const displayedAppointments = sortedAppointments
+  const displayedAppointments = sortedAppointments.filter((apt) =>
+    isSameDay(new Date(apt.date), currentDate)
+  )
 
   const formatPaymentAmount = (amount: number | null) => {
     if (amount === null || Number.isNaN(amount)) {
@@ -158,6 +164,43 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
     }
   }
 
+  // Refresh appointments for the currently selected date in the Appointments tab
+  const refreshAppointmentsForCurrentDate = async () => {
+    try {
+      const start = new Date(currentDate)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(currentDate)
+      end.setHours(23, 59, 59, 999)
+
+      const params = new URLSearchParams({
+        startDate: start.toISOString(),
+        endDate: end.toISOString(),
+      })
+
+      const response = await fetch(`/api/admin/appointments?${params.toString()}`)
+      if (!response.ok) return
+
+      const { appointments } = await response.json()
+      setAppointments((prev) => {
+        const prevMap = new Map(prev.map((a) => [a.id, a]))
+
+        return (appointments || []).map((apt: any) => {
+          const prevApt = prevMap.get(apt.id)
+          return {
+            ...apt,
+            paymentAmount: apt.paymentAmount ? Number(apt.paymentAmount) : null,
+            adminConfirmed:
+              typeof apt.adminConfirmed === "boolean"
+                ? apt.adminConfirmed
+                : prevApt?.adminConfirmed ?? false,
+          }
+        })
+      })
+    } catch (error) {
+      console.error("Error refreshing appointments:", error)
+    }
+  }
+
   const handleExportReport = async (
     type: "weekly" | "monthly",
     startDate: Date,
@@ -168,10 +211,17 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
     try {
       if (formatType === "excel") {
         // For Excel, fetch data and generate client-side
-        const response = await fetch(
-          `/api/admin/appointments?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&doctorId=${reportDoctorId}`
-        )
-        
+        const params = new URLSearchParams({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        })
+
+        if (reportDoctorId) {
+          params.append("doctorId", reportDoctorId)
+        }
+
+        const response = await fetch(`/api/admin/appointments?${params.toString()}`)
+
         if (response.ok) {
           const { appointments } = await response.json()
           const reportData = appointments.map((apt: any) => ({
@@ -196,9 +246,18 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
         }
       } else {
         // For PDF, download from server
-        const response = await fetch(
-          `/api/admin/reports?type=${type}&startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}&format=${formatType}&doctorId=${reportDoctorId}`
-        )
+        const params = new URLSearchParams({
+          type,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          format: formatType,
+        })
+
+        if (reportDoctorId) {
+          params.append("doctorId", reportDoctorId)
+        }
+
+        const response = await fetch(`/api/admin/reports?${params.toString()}`)
 
         if (response.ok) {
           const blob = await response.blob()
@@ -245,7 +304,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
     }
   }
 
-  // Load doctors for admin management and schedules
+  // Load doctors once on mount so they are available for Reports, Doctors and Schedules tabs
   useEffect(() => {
     const loadDoctors = async () => {
       try {
@@ -262,10 +321,29 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
         // ignore
       }
     }
-    if (activeTab === "doctors" || activeTab === "schedules") {
-      loadDoctors()
+    loadDoctors()
+  }, [])
+
+  // Auto-refresh appointments every 30 seconds when on the Appointments tab
+  useEffect(() => {
+    if (activeTab !== "appointments") return
+
+    let cancelled = false
+
+    // Initial refresh when tab/date becomes active
+    refreshAppointmentsForCurrentDate()
+
+    const intervalId = setInterval(() => {
+      if (!cancelled) {
+        refreshAppointmentsForCurrentDate()
+      }
+    }, 20000) // 20 seconds
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
     }
-  }, [activeTab])
+  }, [activeTab, currentDate])
 
   const handleCreateDoctor = async () => {
     setDoctorError(null)
@@ -326,6 +404,42 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
       alert("Failed to update payment status")
     } finally {
       setProcessingPaymentId(null)
+    }
+  }
+
+  const handleToggleAdminConfirm = async (appointment: Appointment) => {
+    const currentlyConfirmed = !!appointment.adminConfirmed
+
+    if (currentlyConfirmed) {
+      const ok = window.confirm("Are you sure to unconfirm the appointment?")
+      if (!ok) return
+    }
+
+    try {
+      setIsLoading(true)
+      const response = await fetch(`/api/admin/appointments/${appointment.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminConfirmed: !currentlyConfirmed }),
+      })
+
+      if (response.ok) {
+        setAppointments((prev) =>
+          prev.map((apt) =>
+            apt.id === appointment.id
+              ? { ...apt, adminConfirmed: !currentlyConfirmed }
+              : apt
+          )
+        )
+      } else {
+        const err = await response.json().catch(() => ({}))
+        alert(err.error || "Failed to update confirmation")
+      }
+    } catch (error) {
+      console.error("Error updating confirmation:", error)
+      alert("Failed to update confirmation")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -395,26 +509,57 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
             { label: "Today", value: stats.today, icon: Clock },
             { label: "Upcoming", value: stats.upcoming, icon: TrendingUp },
             { label: "Patients", value: stats.patients, icon: Users },
-          ].map((card) => (
-            <Card
-              key={card.label}
-              className="bg-white border border-[#e4e4e7] shadow-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-[#f4f4f5] flex items-center justify-center">
-                  <card.icon className="w-5 h-5 text-[#52525b]" />
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-[#6b7280]">
-                    {card.label}
-                  </p>
-                  <p className="text-xl font-semibold text-[#111111] leading-tight">
-                    {card.value}
-                  </p>
-                </div>
-              </div>
-            </Card>
-          ))}
+          ].map((card) => {
+            const isTodayCard = card.label === "Today"
+            const isUpcomingCard = card.label === "Upcoming"
+            return (
+              <button
+                key={card.label}
+                type="button"
+                className="text-left"
+                onClick={() => {
+                  if (isTodayCard) {
+                    setActiveTab("appointments")
+                    setCurrentDate(new Date())
+                  } else if (isUpcomingCard) {
+                    // Find the next appointment on a future date (after today)
+                    const todayStart = startOfDay(new Date())
+                    const todayEnd = endOfDay(todayStart)
+                    const next = sortedAppointments.find(
+                      (apt) => new Date(apt.date).getTime() > todayEnd.getTime()
+                    )
+                    if (next) {
+                      setActiveTab("appointments")
+                      setCurrentDate(new Date(next.date))
+                    }
+                  }
+                }}
+              >
+                <Card
+                  className={
+                    "bg-white border border-[#e4e4e7] shadow-sm transition-transform duration-150 " +
+                    (isTodayCard || isUpcomingCard
+                      ? "hover:-translate-y-0.5 cursor-pointer"
+                      : "")
+                  }
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#f4f4f5] flex items-center justify-center">
+                      <card.icon className="w-5 h-5 text-[#52525b]" />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-[#6b7280]">
+                        {card.label}
+                      </p>
+                      <p className="text-xl font-semibold text-[#111111] leading-tight">
+                        {card.value}
+                      </p>
+                    </div>
+                  </div>
+                </Card>
+              </button>
+            )
+          })}
         </div>
 
         {/* Tabs */}
@@ -430,17 +575,6 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
               )}
             >
               Appointments
-            </button>
-            <button
-              onClick={() => setActiveTab("slots")}
-              className={cn(
-                "pb-3 px-1 transition-colors border-b-2",
-                activeTab === "slots"
-                  ? "border-[#111111] text-[#111111]"
-                  : "border-transparent text-[#6b7280] hover:text-[#111111]"
-              )}
-            >
-              Vacant Slots
             </button>
             <button
               onClick={() => setActiveTab("reports")}
@@ -465,6 +599,17 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
               Doctors
             </button>
             <button
+              onClick={() => setActiveTab("slots")}
+              className={cn(
+                "pb-3 px-1 transition-colors border-b-2",
+                activeTab === "slots"
+                  ? "border-[#111111] text-[#111111]"
+                  : "border-transparent text-[#6b7280] hover:text-[#111111]"
+              )}
+            >
+              Vacant Slots
+            </button>
+            <button
               onClick={() => setActiveTab("schedules")}
               className={cn(
                 "pb-3 px-1 transition-colors border-b-2",
@@ -482,9 +627,36 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
         {activeTab === "appointments" && (
           <Card variant="elevated" className="p-4 sm:p-6 bg-white border border-[#e4e4e7] shadow-sm">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-5">
-              <h2 className="text-lg sm:text-xl font-semibold text-[#111111] tracking-tight">
-                All Appointments
-              </h2>
+              <div className="space-y-2">
+                <h2 className="text-lg sm:text-xl font-semibold text-[#111111] tracking-tight">
+                  Appointments
+                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs sm:text-sm text-[#4b5563]">
+                  <span>
+                    {`Selected date: ${format(currentDate, "EEE, MMM d, yyyy")}${
+                      isSameDay(currentDate, new Date()) ? " (Today)" : ""
+                    }`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs px-3 py-1"
+                      onClick={() => setCurrentDate((prev) => addDays(prev, -1))}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs px-3 py-1"
+                      onClick={() => setCurrentDate((prev) => addDays(prev, 1))}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
               <Button
                 variant="outline"
                 className="border-[#111111] text-[#111111] hover:bg-[#111111] hover:text-white text-sm"
@@ -498,10 +670,10 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
               </Button>
             </div>
 
-            {appointments.length === 0 ? (
+            {displayedAppointments.length === 0 ? (
               <div className="text-center py-12 text-[#86868b]">
                 <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>No appointments yet</p>
+                <p>No appointments for this date</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -541,7 +713,12 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
                     {displayedAppointments.map((appointment) => (
                       <tr
                         key={appointment.id}
-                        className="border-b border-[#f1f1f3] hover:bg-[#f9fafb] transition-colors"
+                        className={cn(
+                          "border-b transition-colors",
+                          appointment.paymentStatus === "PAID"
+                            ? "bg-green-50 border-green-100 hover:bg-green-100"
+                            : "border-[#f1f1f3] hover:bg-[#f9fafb]"
+                        )}
                       >
                         <td className="py-4 px-4">
                           <p className="font-medium text-[#111111] text-sm">
@@ -557,6 +734,13 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
                           <p className="font-medium text-[#111111] text-sm">
                             {getPatientName(appointment)}
                           </p>
+                          {appointment.createdBy && (
+                            <p className="text-xs text-[#6b7280] mt-0.5">
+                              Created by{" "}
+                              {appointment.createdBy.charAt(0).toUpperCase() +
+                                appointment.createdBy.slice(1)}
+                            </p>
+                          )}
                         </td>
                         <td className="py-4 px-4">
                           <p className="text-[#27272a] text-sm">{getPatientPhone(appointment)}</p>
@@ -602,7 +786,16 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <label className="flex items-center gap-1 text-xs text-[#4b5563]">
+                              <input
+                                type="checkbox"
+                                className="h-3 w-3 rounded border-[#d4d4d8]"
+                                checked={!!appointment.adminConfirmed}
+                                onChange={() => handleToggleAdminConfirm(appointment)}
+                              />
+                              <span>Phone confirmed</span>
+                            </label>
                             {appointment.paymentStatus !== "PAID" && appointment.paymentAmount ? (
                               <Button
                                 variant="outline"
@@ -855,15 +1048,17 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-[#4b5563]">
-                  Doctor
+                <label className="flex items-center gap-1 text-xs font-medium text-[#4b5563]">
+                  <Filter className="w-3 h-3" />
+                  <span>Doctor</span>
                 </label>
                 <select
                   className="border border-[#e4e4e7] rounded-lg px-2 py-1 text-sm bg-white"
                   value={reportDoctorId}
                   onChange={(e) => setReportDoctorId(e.target.value)}
                 >
-                  <option value="ALL">All doctors</option>
+                  {/* Empty value = no filter = all doctors */}
+                  <option value="">All doctors</option>
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name || d.email}

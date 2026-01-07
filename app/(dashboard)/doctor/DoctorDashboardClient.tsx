@@ -1,6 +1,6 @@
-'use client'
+"use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { format, startOfDay } from "date-fns"
 import { Calendar, ClipboardList, Clock, Plus } from "lucide-react"
 import { Card } from "@/components/ui/Card"
@@ -36,11 +36,13 @@ interface DoctorDashboardClientProps {
     today: number
     pendingTreatments: number
   }
+  doctorName: string
 }
 
 export const DoctorDashboardClient: React.FC<DoctorDashboardClientProps> = ({
   initialAppointments,
   stats,
+  doctorName,
 }) => {
   const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments)
   const [activeTab, setActiveTab] = useState<"appointments" | "reports">("appointments")
@@ -51,6 +53,17 @@ export const DoctorDashboardClient: React.FC<DoctorDashboardClientProps> = ({
   const [isLoading, setIsLoading] = useState(false)
 
   const todayStart = startOfDay(new Date())
+
+  const firstName = useMemo(() => {
+    if (!doctorName) return "Doctor"
+    const trimmed = doctorName.trim()
+    const parts = trimmed.split(" ")
+    // If the name already starts with Dr/Doctor, keep as is
+    if (/^dr\.?/i.test(parts[0]) || /^doctor$/i.test(parts[0])) {
+      return trimmed.replace(/^Dr\.?\s*/i, "").split(" ")[0]
+    }
+    return parts[0]
+  }, [doctorName])
 
   const sortedAppointments = useMemo(
     () =>
@@ -252,12 +265,51 @@ export const DoctorDashboardClient: React.FC<DoctorDashboardClientProps> = ({
     }).format(amount)
   }
 
+  // Refresh appointments from server (doctor's own appointments)
+  const refreshAppointments = async () => {
+    try {
+      const response = await fetch("/api/doctor/appointments")
+      if (!response.ok) return
+
+      const { appointments } = await response.json()
+      setAppointments(
+        (appointments || []).map((apt: any) => ({
+          ...apt,
+          date: apt.date,
+          paymentAmount: apt.paymentAmount ? Number(apt.paymentAmount) : null,
+        }))
+      )
+    } catch (error) {
+      console.error("Error refreshing doctor appointments:", error)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab !== "appointments") return
+
+    let cancelled = false
+
+    // Initial refresh when tab becomes active
+    refreshAppointments()
+
+    const intervalId = setInterval(() => {
+      if (!cancelled) {
+        refreshAppointments()
+      }
+    }, 60000) // 60 seconds
+
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [activeTab])
+
   return (
     <div className="min-h-screen bg-[#f4f4f5] py-6 sm:py-8 text-[#111827]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-semibold text-[#111111] mb-1 tracking-tight">
-            Appointment List
+            Dr {firstName}&apos;s Dashboard
           </h1>
           <p className="text-sm sm:text-base text-[#4b5563]">
             Today’s schedule and upcoming treatments
@@ -461,9 +513,6 @@ export const DoctorDashboardClient: React.FC<DoctorDashboardClientProps> = ({
               appointmentId={selectedAppointment.id}
               patientName={getPatientName(selectedAppointment)}
               currentAmount={selectedAppointment.paymentAmount || undefined}
-              currentStatus={
-                (selectedAppointment.paymentStatus as "PAID" | "PENDING" | "PARTIAL") || "PENDING"
-              }
               currentTreatmentStatus={
                 (selectedAppointment.treatmentStatus as "PENDING" | "PARTIAL" | "COMPLETED") ||
                 "PENDING"

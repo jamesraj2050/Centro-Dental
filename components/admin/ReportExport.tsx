@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Calendar, Download, FileSpreadsheet, FileText } from "lucide-react"
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subWeeks, subMonths } from "date-fns"
+import { cn } from "@/lib/utils"
 
 interface ReportExportProps {
   onExport: (type: "weekly" | "monthly", startDate: Date, endDate: Date, format: "excel" | "pdf") => Promise<void>
@@ -22,6 +23,9 @@ export const ReportExport: React.FC<ReportExportProps> = ({
   const [endDate, setEndDate] = useState<string>(
     format(endOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd")
   )
+  const [quickSelection, setQuickSelection] = useState<
+    "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth" | null
+  >("thisWeek")
 
   const handleQuickSelect = (type: "thisWeek" | "lastWeek" | "thisMonth" | "lastMonth") => {
     const now = new Date()
@@ -50,6 +54,7 @@ export const ReportExport: React.FC<ReportExportProps> = ({
 
     setStartDate(format(start, "yyyy-MM-dd"))
     setEndDate(format(end, "yyyy-MM-dd"))
+    setQuickSelection(type)
   }
 
   const handleExport = async (format: "excel" | "pdf") => {
@@ -92,39 +97,69 @@ export const ReportExport: React.FC<ReportExportProps> = ({
         <label className="block text-sm font-medium text-[#1d1d1f] mb-3">
           Quick Select
         </label>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickSelect("thisWeek")}
-          >
-            This Week
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickSelect("lastWeek")}
-          >
-            Last Week
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickSelect("thisMonth")}
-          >
-            This Month
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickSelect("lastMonth")}
-          >
-            Last Month
-          </Button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-[#6b7280] uppercase tracking-wide">
+              Weekly
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  quickSelection === "thisWeek" &&
+                    "border-[#1E40AF] bg-[#1E40AF]/10 font-semibold"
+                )}
+                onClick={() => handleQuickSelect("thisWeek")}
+              >
+                This Week
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  quickSelection === "lastWeek" &&
+                    "border-[#1E40AF] bg-[#1E40AF]/10 font-semibold"
+                )}
+                onClick={() => handleQuickSelect("lastWeek")}
+              >
+                Last Week
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-[#6b7280] uppercase tracking-wide">
+              Monthly
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  quickSelection === "thisMonth" &&
+                    "border-[#1E40AF] bg-[#1E40AF]/10 font-semibold"
+                )}
+                onClick={() => handleQuickSelect("thisMonth")}
+              >
+                This Month
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn(
+                  quickSelection === "lastMonth" &&
+                    "border-[#1E40AF] bg-[#1E40AF]/10 font-semibold"
+                )}
+                onClick={() => handleQuickSelect("lastMonth")}
+              >
+                Last Month
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Calendar, Clock, X } from "lucide-react"
 import Link from "next/link"
-import { format } from "date-fns"
+import { format, startOfDay } from "date-fns"
 import { CancelAppointmentButton } from "./CancelAppointmentButton"
 
 export default async function DashboardPage() {
@@ -48,12 +48,14 @@ export default async function DashboardPage() {
     redirect("/doctor")
   }
 
+  const todayStart = startOfDay(new Date())
+
   const currentAppointment = user.appointments.find(
-    (apt) => new Date(apt.date) >= new Date() && apt.status !== "CANCELLED"
+    (apt) => new Date(apt.date) >= todayStart && apt.status !== "CANCELLED"
   )
 
   const pastAppointments = user.appointments.filter(
-    (apt) => new Date(apt.date) < new Date() || apt.status === "CANCELLED"
+    (apt) => new Date(apt.date) < todayStart || apt.status === "CANCELLED"
   )
 
   return (

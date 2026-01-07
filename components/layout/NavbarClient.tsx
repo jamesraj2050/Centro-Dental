@@ -18,9 +18,8 @@ export const NavbarClient: React.FC<NavbarClientProps> = ({ session }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const handleSignOut = async () => {
-    await nextAuthSignOut({ redirect: false })
-    router.push("/")
-    router.refresh()
+    // Let NextAuth handle clearing the session and redirecting home
+    await nextAuthSignOut({ callbackUrl: "/" })
     setMobileMenuOpen(false)
   }
 

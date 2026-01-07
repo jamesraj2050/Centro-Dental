@@ -76,6 +76,7 @@ export default async function DoctorPage() {
     <DoctorDashboardClient
       initialAppointments={serializedAppointments}
       stats={stats}
+      doctorName={user.name}
     />
   )
 }
