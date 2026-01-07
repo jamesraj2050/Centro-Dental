@@ -50,11 +50,17 @@ export async function GET(
       issuedBy: session.user.name || "Admin",
     })
 
-    return new NextResponse(receiptBuffer, {
+    // Convert Uint8Array to a proper ArrayBuffer slice for NextResponse
+    const arrayBuffer = receiptBuffer.buffer.slice(
+      receiptBuffer.byteOffset,
+      receiptBuffer.byteOffset + receiptBuffer.byteLength
+    )
+
+    return new NextResponse(arrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="receipt-${params.id}.pdf"`,
+        "Content-Disposition": `attachment; filename=\"receipt-${params.id}.pdf\"`,
       },
     })
   } catch (error) {
