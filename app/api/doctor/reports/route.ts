@@ -89,7 +89,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function generatePDFBuffer(data: any[], filename: string): Promise<Buffer> {
+// Generate PDF and return as ArrayBuffer (Edge-compatible, no Node Buffer)
+async function generatePDFBuffer(data: any[], filename: string): Promise<ArrayBuffer> {
   const { jsPDF } = await import("jspdf")
   await import("jspdf-autotable")
   
@@ -139,7 +140,7 @@ async function generatePDFBuffer(data: any[], filename: string): Promise<Buffer>
   doc.text(`Total Amount: $${totalAmount.toFixed(2)}`, 14, finalY + 10)
   doc.text(`Paid: ${paidCount} | Pending: ${pendingCount}`, 14, finalY + 16)
 
-  const pdfOutput = doc.output("arraybuffer")
-  return Buffer.from(pdfOutput)
+  const pdfOutput = doc.output("arraybuffer") as ArrayBuffer
+  return pdfOutput
 }
 
