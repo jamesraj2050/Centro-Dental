@@ -107,8 +107,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Helper to generate PDF buffer
-async function generatePDFBuffer(data: ReportData[], filename: string): Promise<Buffer> {
+// Helper to generate PDF buffer as ArrayBuffer (Edge-compatible)
+async function generatePDFBuffer(data: ReportData[], filename: string): Promise<ArrayBuffer> {
   const { jsPDF } = await import("jspdf")
   await import("jspdf-autotable")
   
@@ -159,7 +159,7 @@ async function generatePDFBuffer(data: ReportData[], filename: string): Promise<
   doc.text(`Total Amount: $${totalAmount.toFixed(2)}`, 14, finalY + 10)
   doc.text(`Paid: ${paidCount} | Pending: ${pendingCount}`, 14, finalY + 16)
 
-  const pdfOutput = doc.output("arraybuffer")
-  return Buffer.from(pdfOutput)
+  const pdfOutput = doc.output("arraybuffer") as ArrayBuffer
+  return pdfOutput
 }
 
