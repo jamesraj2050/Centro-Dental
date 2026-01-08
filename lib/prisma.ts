@@ -5,7 +5,12 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 // Check if we're in Edge Runtime - Prisma doesn't work there
-const isEdgeRuntime = typeof EdgeRuntime !== 'undefined' || (typeof process === 'undefined' || !process.versions?.node)
+const isEdgeRuntime =
+  // Edge runtime exposes a global EdgeRuntime marker on globalThis
+  typeof (globalThis as any).EdgeRuntime !== 'undefined' ||
+  // Or if there's no Node.js process available
+  typeof process === 'undefined' ||
+  !process.versions?.node
 
 // #region agent log
 if (typeof process !== 'undefined' && process.versions?.node) {
