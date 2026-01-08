@@ -806,20 +806,7 @@ export const AdminDashboardClient: React.FC<AdminDashboardClientProps> = ({
                               >
                                 {processingPaymentId === appointment.id ? "Updating..." : "Mark Received"}
                               </Button>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-xs border-[#111111] text-[#111111] hover:bg-[#111111] hover:text-white"
-                                onClick={() => handleDownloadReceipt(appointment.id)}
-                                disabled={
-                                  appointment.paymentStatus !== "PAID" ||
-                                  downloadingReceiptId === appointment.id
-                                }
-                              >
-                                {downloadingReceiptId === appointment.id ? "Preparing..." : "Receipt"}
-                              </Button>
-                            )}
+                            ) : null}
                             <button
                               onClick={() => handleDeleteAppointment(appointment.id)}
                               className="p-2 hover:bg-red-50 rounded-lg transition-colors"
