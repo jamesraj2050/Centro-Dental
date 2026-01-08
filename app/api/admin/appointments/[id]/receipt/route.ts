@@ -50,8 +50,14 @@ export async function GET(
       issuedBy: session.user.name || "Admin",
     })
 
-    // Wrap Uint8Array in a Blob so NextResponse receives a valid BodyInit
-    const pdfBlob = new Blob([receiptBuffer], { type: "application/pdf" })
+    // Convert the Uint8Array into a proper ArrayBuffer first
+    const arrayBuffer = receiptBuffer.buffer.slice(
+      receiptBuffer.byteOffset,
+      receiptBuffer.byteOffset + receiptBuffer.byteLength
+    )
+
+    // Wrap ArrayBuffer in a Blob so NextResponse gets a valid BodyInit
+    const pdfBlob = new Blob([arrayBuffer], { type: "application/pdf" })
 
     return new NextResponse(pdfBlob, {
       status: 200,
